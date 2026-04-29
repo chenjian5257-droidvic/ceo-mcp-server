@@ -1,0 +1,13 @@
+{
+  "name": "ceo-mcp-server",
+  "version": "1.0.0",
+  "description": "CEO助手MCP服务器 - 供小智AI调用",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}
