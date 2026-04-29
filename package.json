@@ -2,12 +2,17 @@
   "name": "ceo-mcp-server",
   "version": "1.0.0",
   "description": "CEO助手MCP服务器 - 供小智AI调用",
-  "main": "server.js",
-  "type": "module",
+  "main": "server-stdio.js",
+  "bin": {
+    "ceo-mcp-server": "server-stdio.js"
+  },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server-stdio.js"
   },
   "dependencies": {
     "ws": "^8.20.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
