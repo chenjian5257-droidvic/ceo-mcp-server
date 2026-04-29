@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * CEO MCP Server - STDIO版本
- * 符合MCP协议标准
+ * CEO MCP Server - 使用官方MCP SDK STDIO传输
  */
 
-const JSONRPC_VERSION = '2.0';
+const path = require('path');
+const sdkPath = path.join(__dirname, 'node_modules/@modelcontextprotocol/sdk/dist/cjs');
+
+const { Server } = require(path.join(sdkPath, 'server/index.js'));
+const { StdioServerTransport } = require(path.join(sdkPath, 'server/stdio.js'));
+const { ListToolsRequestSchema, CallToolRequestSchema } = require(path.join(sdkPath, 'types.js'));
 
 // 工具定义
 const tools = [
@@ -25,90 +29,46 @@ const tools = [
   }
 ];
 
-let requestId = 0;
-
-// 发送响应
-function sendResponse(id, result, error = null) {
-  const response = {
-    jsonrpc: JSONRPC_VERSION,
-    id: id
-  };
-  if (error) {
-    response.error = error;
-  } else {
-    response.result = result;
-  }
-  console.log(JSON.stringify(response));
-}
-
-// 处理请求
-function handleRequest(method, params, id) {
-  switch (method) {
-    case 'initialize':
-      return {
-        protocolVersion: '2024-11-05',
-        capabilities: { tools: {} },
-        serverInfo: { name: 'CEO-Assistant', version: '1.0.0' }
-      };
-    
-    case 'tools/list':
-      return { tools: tools };
-    
-    case 'tools/call': {
-      const { name } = params;
-      let text;
-      switch (name) {
-        case 'check_accounting':
-          text = '今日记账数据：成本2215元，运费100元，数量77件（4月29日）';
-          break;
-        case 'get_status':
-          text = 'CEO助手运行正常，2026年4月30日';
-          break;
-        case 'list_tasks':
-          text = '当前任务：小智AI接入OpenClaw配置中';
-          break;
-        default:
-          text = `未知工具: ${name}`;
-      }
-      return { content: [{ type: 'text', text: text }] };
+const server = new Server(
+  {
+    name: 'CEO-Assistant',
+    version: '1.0.0'
+  },
+  {
+    capabilities: {
+      tools: {}
     }
-    
+  }
+);
+
+// 处理工具列表
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools };
+});
+
+// 处理工具调用
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  let text;
+  
+  switch (name) {
+    case 'check_accounting':
+      text = '今日记账数据：成本2215元，运费100元，数量77件（4月29日）';
+      break;
+    case 'get_status':
+      text = 'CEO助手运行正常，2026年4月30日';
+      break;
+    case 'list_tasks':
+      text = '当前任务：小智AI接入OpenClaw配置中';
+      break;
     default:
-      throw new Error(`Method not found: ${method}`);
+      text = `未知工具: ${name}`;
   }
-}
-
-// 读取stdin
-let buffer = '';
-
-process.stdin.on('data', (chunk) => {
-  buffer += chunk.toString();
   
-  // 按行处理
-  const lines = buffer.split('\n');
-  buffer = lines.pop(); // 保留最后一行（可能不完整）
-  
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    try {
-      const message = JSON.parse(line);
-      const { id, method, params } = message;
-      
-      try {
-        const result = handleRequest(method, params, id);
-        sendResponse(id, result);
-      } catch (err) {
-        sendResponse(id, null, { code: -32603, message: err.message });
-      }
-    } catch (err) {
-      // 忽略解析错误
-    }
-  }
+  return {
+    content: [{ type: 'text', text }]
+  };
 });
 
-process.stdin.on('end', () => {
-  process.exit(0);
-});
-
-// 发送ready信号
-console.log(JSON.stringify({ jsonrpc: JSONRPC_VERSION, id: null, result: { status: 'ready' } }));
+const transport = new StdioServerTransport();
+server.connect(transport);
