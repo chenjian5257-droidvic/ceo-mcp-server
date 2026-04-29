@@ -9,10 +9,6 @@
   "scripts": {
     "start": "node server-stdio.js"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "ws": "^8.20.0"
-  },
   "engines": {
     "node": ">=18.0.0"
   }

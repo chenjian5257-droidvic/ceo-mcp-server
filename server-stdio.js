@@ -1,14 +1,9 @@
 #!/usr/bin/env node
 /**
- * CEO MCP Server - 使用官方MCP SDK STDIO传输
+ * CEO MCP Server - 纯JavaScript MCP STDIO实现
  */
 
-const path = require('path');
-const sdkPath = path.join(__dirname, 'node_modules/@modelcontextprotocol/sdk/dist/cjs');
-
-const { Server } = require(path.join(sdkPath, 'server/index.js'));
-const { StdioServerTransport } = require(path.join(sdkPath, 'server/stdio.js'));
-const { ListToolsRequestSchema, CallToolRequestSchema } = require(path.join(sdkPath, 'types.js'));
+const JSONRPC_VERSION = '2.0';
 
 // 工具定义
 const tools = [
@@ -29,46 +24,75 @@ const tools = [
   }
 ];
 
-const server = new Server(
-  {
-    name: 'CEO-Assistant',
-    version: '1.0.0'
-  },
-  {
-    capabilities: {
-      tools: {}
+let requestId = 0;
+
+// 发送响应
+function send(id, result, error = null) {
+  const response = { jsonrpc: JSONRPC_VERSION, id };
+  if (error) {
+    response.error = error;
+  } else {
+    response.result = result;
+  }
+  process.stdout.write(JSON.stringify(response) + '\n');
+}
+
+// 处理请求
+function handle(method, params, id) {
+  switch (method) {
+    case 'initialize':
+      return {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'CEO-Assistant', version: '1.0.0' }
+      };
+    case 'tools/list':
+      return { tools };
+    case 'tools/call': {
+      const { name } = params;
+      let text;
+      switch (name) {
+        case 'check_accounting':
+          text = '今日记账数据：成本2215元，运费100元，数量77件（4月29日）';
+          break;
+        case 'get_status':
+          text = 'CEO助手运行正常，2026年4月30日';
+          break;
+        case 'list_tasks':
+          text = '当前任务：小智AI接入OpenClaw配置中';
+          break;
+        default:
+          text = `未知工具: ${name}`;
+      }
+      return { content: [{ type: 'text', text }] };
+    }
+    default:
+      throw new Error(`Method not found: ${method}`);
+  }
+}
+
+// 读取stdin
+let buffer = '';
+process.stdin.on('data', (chunk) => {
+  buffer += chunk.toString();
+  const lines = buffer.split('\n');
+  buffer = lines.pop();
+  
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const msg = JSON.parse(line);
+      const { id, method, params } = msg;
+      try {
+        const result = handle(method, params, id);
+        send(id, result);
+      } catch (err) {
+        send(id, null, { code: -32603, message: err.message });
+      }
+    } catch (e) {
+      // ignore parse errors
     }
   }
-);
-
-// 处理工具列表
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
 });
 
-// 处理工具调用
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  let text;
-  
-  switch (name) {
-    case 'check_accounting':
-      text = '今日记账数据：成本2215元，运费100元，数量77件（4月29日）';
-      break;
-    case 'get_status':
-      text = 'CEO助手运行正常，2026年4月30日';
-      break;
-    case 'list_tasks':
-      text = '当前任务：小智AI接入OpenClaw配置中';
-      break;
-    default:
-      text = `未知工具: ${name}`;
-  }
-  
-  return {
-    content: [{ type: 'text', text }]
-  };
-});
-
-const transport = new StdioServerTransport();
-server.connect(transport);
+process.stdin.on('end', () => process.exit(0));
